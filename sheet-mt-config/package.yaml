@@ -1,0 +1,38 @@
+format: "1.20"
+package: sheet-mt-config
+title: "Mythtek sheet: +config settings"
+version: 1.0.4
+authors: [SharpMUSH]
+description: "Puts the Mythtek sheet settings and its trait and bestiary tables into +config: registers them with the +config registry, so staff see and change them with +config mt."
+license: MIT
+homepage: https://github.com/SharpMUSH/SharpMUSH.Packages
+keywords: [sheet, mt, config, bridge]
+category: Game System
+subcategory: Mythtek
+bridge: true
+requires_server: ">=1.0"
+verified_server: "1.0"
+
+# A bridge: it joins two packages that do not know about each other. sheet-mt declares its settings as
+# DATA`CONFIG`<NAME>, with their types and limits, and reads them with get() whether or not +config is
+# installed. This package is the one leaf that tells the +config registry where they are.
+depends:
+  - package: sheet-mt
+    version: ">=2.0 <3.0"
+    source:
+      repo: https://github.com/SharpMUSH/SharpMUSH.Packages
+      path: sheet-mt/
+      branch: main
+  - package: plus-config
+    version: ">=1.0"
+    source:
+      repo: https://github.com/SharpMUSH/SharpMUSH
+      path: examples/packages/plus-config/
+      branch: main
+
+objects:
+  - ref: config_registration
+    target: "{{plus-config/registry}}"
+    attributes:
+      SYSTEM`Mythtek: |-
+        {{sheet-mt/sheet}}

@@ -1,0 +1,82 @@
+format: "1.20"
+package: mt-wiki
+title: "Mythtek rules"
+version: 1.1.2
+wiki_landing_page: category:mt_start_here
+wiki_collection_name: mt
+authors: [SharpMUSH]
+description: "Wiki pages for playing with the Mythtek sheet."
+license: MIT
+homepage: https://github.com/MythtekMUSH/Mythtek-Sheet
+keywords: [mt, wiki, rules]
+category: Game System
+subcategory: Mythtek
+requires_server: ">=1.0"
+verified_server: "1.0"
+locale: en
+
+# Full transparency, this file was copy and pasted from SharpMUSH's D20 packages. All changes are made by hand.
+
+# A content package: wiki pages only. The trait page lists the traits sheet-mt ships; a game that edits them in
+# +config changes the sheet, not these pages.
+wiki:
+- page: category:mt_start_here
+  title: 'Start here: mt'
+  categories: []
+  file: wiki/category/mt_start_here.md
+  pin: true
+- page: main:mt_how_to_play
+  title: How to play (mt)
+  categories:
+  - mt_start_here
+  - mt
+  file: wiki/main/mt_how_to_play.md
+- page: main:mt_making_a_character
+  title: Making a character (mt)
+  categories:
+  - mt_start_here
+  - mt
+  file: wiki/main/mt_making_a_character.md
+- page: main:mt_abilities
+  title: Attributes (mt)
+  categories:
+  - mt_start_here
+  - mt
+  file: wiki/main/mt_attributes.md
+- page: main:mt_callings
+  title: Callings (mt)
+  categories:
+  - mt_start_here
+  - mt
+  file: wiki/main/mt_callings.md
+- page: main:mt_purviews
+  title: Purviews (mt)
+  categories:
+  - mt_start_here
+  - mt
+  file: wiki/main/mt_purviews.md
+- page: main:mt_play_and_advancement
+  title: Hit points, gear and advancement (mt)
+  categories:
+  - mt_start_here
+  - mt
+  file: wiki/main/mt_play_and_advancement.md
+- page: main:mt_encounters
+  title: Encounters (mt)
+  categories:
+  - mt_start_here
+  - mt
+  file: wiki/main/mt_encounters.md
+- page: help:mt_license_notice
+  title: About these pages
+  categories: []
+  file: wiki/help/mt_license_notice.md
+  requires:
+    edit:
+    - wiki.admin
+    delete:
+    - wiki.admin
+- page: category:mt
+  title: mt
+  categories: []
+  file: wiki/category/mt.md

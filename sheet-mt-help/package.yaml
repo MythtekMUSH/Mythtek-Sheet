@@ -1,0 +1,46 @@
+format: "1.20"
+package: sheet-mt-help
+title: "Mythtek sheet: +help topics"
+version: 1.0.3
+authors: [SharpMUSH]
+description: "Puts the Mythtek sheet topics into +help: registers the sheet-mt package's help with the +help librarian, and points its messages at +help."
+license: MIT
+homepage: https://github.com/SharpMUSH/SharpMUSH.Packages
+keywords: [sheet, mt, help, bridge]
+category: Game System
+subcategory: Mythtek
+bridge: true
+requires_server: ">=1.0"
+verified_server: "1.0"
+
+# A bridge: it joins two packages that do not know about each other. sheet-mt keeps its topics on its own
+# help object, and plus-help reads any object registered with its librarian. This package is that
+# registration, and the lines that point its messages at +help; uninstalling it takes the topics out of
+# +help, and neither package changes.
+depends:
+  - package: sheet-mt
+    version: ">=2.0 <3.0"
+    source:
+      repo: https://github.com/SharpMUSH/SharpMUSH.Packages
+      path: sheet-mt/
+      branch: main
+  - package: plus-help
+    version: ">=1.0"
+    source:
+      repo: https://github.com/SharpMUSH/SharpMUSH
+      path: examples/packages/plus-help/
+      branch: main
+
+objects:
+  - ref: help_registration
+    target: "{{plus-help/librarian}}"
+    attributes:
+      SRC`SHEET-Mythtek: |-
+        {{sheet-mt/sheet_help}}
+
+  # Lines the sheet's messages end with when +help is here, through its FUN`HINT: HINT`<message>.
+  - ref: message_hints
+    target: "{{sheet-mt/sheet}}"
+    attributes:
+      HINT`SWITCHES: |-
+        +help %0 lists them.

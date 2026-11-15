@@ -1,0 +1,202 @@
+# sheet-mt
+
+A mt character sheet built from a ledger: six ability scores, a level, hit points, coin, gear, and a
+skill list the game edits, each skill untrained, trained or expert. Players make their character in two
+guided steps (abilities, skills) until they are approved, then spend XP on advances. They keep their own
+hit points, coin and gear in play, and roll against the sheet with `+check`, which the whole room sees and
+the game keeps as a recorded roll. Encounters play a scene from copies of the sheets, so nothing that
+happens in one reaches the sheet or another scene unless its GM keeps it, with foes from a bestiary,
+initiative, turns and conditions.
+
+The rules are generic mt mechanics written for this package; no rulebook text is used.
+
+Depends on nothing. Bridges add the rest:
+
+| Bridge | Adds |
+|---|---|
+| [`sheet-mt-help`](../sheet-mt-help/) | the `+help sheet`, `+help check` and `+help encounter` topics |
+| [`sheet-mt-config`](../sheet-mt-config/) | the settings and the trait table in `+config mt` |
+| [`sheet-mt-chargen`](../sheet-mt-chargen/) | ties sheet changes to the player's `+app` application |
+| [`duties-mt`](../duties-mt/) | a Duties roll provider called `mt` |
+| [`mt-wiki`](../mt-wiki/) | wiki pages on playing, making a character, advancing and encounters |
+
+Every sheet package answers `+sheet` and `+check`, and the ones with encounters `+encounter`. Install
+one sheet package per game.
+
+## Commands
+
+| Command | Who | What |
+|---|---|---|
+| `+sheet [<name>]` | all | Your sheet, or another character's when you may read it |
+| `+sheet/chargen [<name>]` | all | The steps of making a character: done, to do, and what comes next |
+| `+sheet/set <ability>=<score>` | unapproved player | Give an ability one of the starting scores (`array`); an empty value frees it |
+| `+sheet/set <skill>=trained` | unapproved player | Train a skill, up to `trained` (4) skills; `untrained` takes it back |
+| `+sheet/advance <level, ability or skill>` | approved player | Spend `advance` XP (10) on a level, +1 to a score up to `score-max` (20), or a step of training |
+| `+sheet/damage <n>`, `+sheet/heal <n\|all>` | player | Take hit points, down to 0, or give them back |
+| `+sheet/coin <n> [<reason>]` | unapproved player | Set coin; `+<n>` adds. `-<n>` spends, at any time |
+| `+sheet/gear <item>=<count> [<reason>]` | unapproved player | List an item (`Rope=1`); a count of 0 takes it off |
+| `+sheet/use <item>` | player | Spend one of an item |
+| `+sheet/ledger [<name>]` | all | Every entry the sheet is built from |
+| `+sheet/revoke <name>/<n>`, `+sheet/clear <name>` | keeper | Take back one entry, or the whole build so character creation starts again |
+| `+sheet/xp <name>=<n> [<reason>]` | keeper | Set XP, or `=+<n>`/`=-<n>` to add or take |
+| `+sheet/log [<name>]` | all | The latest 10 entries of the XP, coin and gear ledgers: how much, the total after, why, and who. `[<name>=]xp`, `coin` or `gear` shows 30 of one |
+| `+sheet/rebuild <name>` | keeper | Works their XP, coin and gear out again from their ledgers |
+| `+sheet/traits` | all | Every trait, its key, and what it adds |
+| `+check[/private][/advantage\|/disadvantage] <trait>[+<n>\|-<n>][=<DC or difficulty>]` | all | Roll 1mt plus the trait for the room: `Alice checks Athletics: 1mt[13] + 6 = 19 vs DC 15: success (roll 13)` |
+| `+encounter [<n>]` | all | The encounters here and yours, or one |
+| `+encounter/start [<title>]` | all | Start one in your room and run it |
+| `+encounter/join [<n>]`, `/leave [<n>]`, `/use [<n>]` | all | Take part with a copy of your sheet, come out, or pick which copy you roll from here |
+| `+encounter/add`, `/remove`, `/keep <name>[=<n>]`, `/end [<n>]` | its GM, keeper | Bring someone in, take them out, write their copy's damage, coin and gear to their sheet, end it |
+| `+encounter/initiative [<n>][=<name or foe>]` | its GM, keeper | Roll initiative for everyone, or one more: 1mt plus Dexterity, or a foe's initiative |
+| `+encounter/next [<n>]` | its GM, keeper, whoever's turn it is | Pass the turn on, skipping foes that are down; after the last, a new round |
+| `+encounter/order [<n>]` | all | The round, the order, hit points and conditions |
+| `+encounter/condition <name or foe>=<condition> [<rounds>]` | its GM, keeper | Mark a condition, counted down at the start of its holder's turns; `=!<condition>` takes it off |
+| `+foe [<foe>]` | all | The foes in the encounter here, or one |
+| `+foe/bestiary [<kind>]` | all | What a GM can add, or one kind |
+| `+foe/add <kind>[=<count>]`, `/remove <foe>` | its GM, keeper | Add foes from the bestiary, numbered (`Goblin 1`), or take one out |
+| `+foe/attack <foe>[=<name>[/<AC>]]` | its GM, keeper | Roll its attack and damage; with an AC, a hit comes off the member's copy |
+| `+foe/damage <foe>=<n>`, `/heal <foe>=<n\|all>` | its GM, keeper | Change a foe's hit points; at 0 it is down |
+| `+foe/run <n>` | its GM, keeper | Pick which encounter your `+foe` commands use, when the room has several |
+
+Keepers (`softcode.mt.admin`, the **Mythtek Sheet Keeper** role) put `<name>/` before the trait or item of
+`/set`, `/advance`, `/gear` and `/use`, and `<name>=` before the value of `/damage`, `/heal` and `/coin`,
+to change anyone's sheet at any time. A keeper may set any score up to 30, any training, a level
+(`+sheet/set <name>/level=<n>`), and give an advance without XP. An encounter's GM does the same for the
+hit points, coin and gear of a member playing from that encounter's copy.
+
+A character reads their own sheet; keepers read every sheet; `+config mt/public=yes` lets anyone read
+anyone's.
+
+## The numbers
+
+- An ability adds `(score - 10) / 2`, rounded down. A score not yet set is `score-default` (10).
+- A skill adds its ability's modifier, plus the training bonus when trained, twice it when expert.
+- The training bonus is `bonus-base` (2) at level 1 and grows by 1 every `bonus-every` (4) levels.
+- The most hit points are `hp-level` (8) plus the `hp-ability` (con) modifier for each level, at least 1
+  a level.
+- A check meets its DC to succeed. With `crits` on, a natural 20 is `crit-success` and a natural 1
+  `crit-fail`, whatever the total.
+- The difficulty words trivial, easy, standard, hard and extreme are DC 5, 10, 15, 20 and 25
+  (`+config mt/dcs`).
+- `+check <trait>=<foe>` uses that foe's AC as the DC.
+- A foe's attack is 1mt plus its attack bonus against the AC given. A natural 20 hits and doubles the damage
+  dice; a natural 1 misses. With `crits` off, only the total counts.
+
+## The ledger
+
+A character's build is their ledger, `Mythtek`LEDGER`<n>`: one JSON entry per step, each with the `wizard`
+attribute flag so only the sheet object or a wizard writes one; an entry without the flag is not read.
+
+| Kind | Fields | What it does |
+|---|---|---|
+| `score` | `key`, `value` | An ability's base score; empty is unassigned |
+| `boost` | `key`, `value` | Added to the ability's base (an advance) |
+| `train` | `key`, `value` | A skill's training, 0, 1 or 2; a later one replaces it |
+| `level` | `value` | The level; a later one replaces it |
+| `revoke` | `value` | Takes back entry `value` |
+| `clear` | | Every entry before it stops counting |
+
+Every entry also has `n`, `phase` (`chargen`, `play` or `staff`), `by` (an objid) and `at` (secs). Before
+approval a player's change rewrites their own `chargen` entry of the same kind and key; every other change
+is a new entry. A ledger holds at most 200 entries.
+
+## The XP and money ledgers
+
+XP, coin and gear each have a ledger of their own, apart from the sheet's: `Mythtek`XPLEDGER`<n>`,
+`Mythtek`MONEYLEDGER`<n>` and `Mythtek`GEARLEDGER`<n>`, each entry with the `wizard` attribute flag: `n`, `delta`,
+`total` (the running total after it), `item` and `label` (gear's key and name), `reason`, `by` and `at`. A
+keeper's `/xp`, `/coin` and `/gear` take a reason after the number; an advance records the XP it spends,
+`API`COIN` and `API`GEAR` (Duties rewards) record `Reward`, and `/keep` records how the encounter's copy
+differs from the sheet. Changes to an encounter's copy are entered only when they are kept. Each ledger
+keeps 500 entries; past that, the oldest entry that a later one for the same item replaces goes, so every
+latest total stays.
+
+## Caches
+
+`Mythtek`XP`, `Mythtek`COIN` and `Mythtek`GEAR`<KEY>` hold the latest entry's total, and `Mythtek`MERGED` the sheet ledger's
+entries in force, once something has worked them out. Only ledger writes touch a cache: a new entry rewrites
+its total, and a sheet ledger entry drops `Mythtek`MERGED` until the next read. `+sheet/rebuild <name>`
+(keepers) works every cache out again from the ledgers.
+
+## Encounters
+
+An encounter is a scene played from copies of the sheets. A room may hold several, and a character may be in
+several. A copy is taken when someone joins, from their sheet as it is then. While a character is in the room
+of an encounter they joined, `+check`, damage, healing, coin and gear use that copy: the one `/use` picked,
+else the last one joined. Anywhere else the sheet applies. An encounter lasts until `/end`, over any number of
+days; `/end` drops every copy, and `/keep` first writes one character's damage, coin and gear back to their
+sheet. Nothing one encounter does touches another, or the sheet.
+
+The Duties provider and every `API`` function always use the sheet itself.
+
+## Foes and turns
+
+The GM of an encounter adds foes from the bestiary, a `+config` table of kinds (`+config mt/foes`) with a
+label, `ac`, `hp`, `init`, `attack`, `damage` (dice such as `1d6+2`), `level` and `notes`. The package ships
+thirteen, from a giant rat to a young dragon. A foe added to an encounter is a copy of its kind, numbered in
+that encounter, with its own hit points and conditions; changing the bestiary changes no foe already added.
+An encounter holds at most 30 foes. In a room with several encounters, `+foe/run <n>` picks the one
+`+foe` and `+encounter/condition` use.
+
+`+encounter/initiative` puts every member and every foe still standing in order. A condition with rounds
+counts down at the start of its holder's turn and goes at 0. `+encounter/end` drops the foes, the order and
+the conditions with the copies.
+
+## Where the data lives
+
+```
+Mythtek                 the root: wizard, no_command
+Mythtek`LEDGER`<n>      a ledger entry
+Mythtek`MERGED          cache: the ledger entries in force
+Mythtek`DAMAGE          hit points lost
+Mythtek`XPLEDGER`<n>    an XP ledger entry
+Mythtek`MONEYLEDGER`<n> a coin ledger entry
+Mythtek`GEARLEDGER`<n>  a gear ledger entry
+Mythtek`XP              cache: experience
+Mythtek`COIN            cache: the coin
+Mythtek`GEAR`<KEY>      cache: an item, <count>|<name>, the key its name in upper case
+Mythtek`ENCOUNTERS      the encounters they are in, in the order they joined
+Mythtek`USING           the encounter /use picked
+```
+
+On **Mythtek Encounters**: `ENC`<n>` the title, with `ROOM`, `GM`, `STARTED` and `COPY`<dbref number>`, each
+member's copy, a JSON object with `level`, `scores` (`STR=15 DEX=14 ...`), `training` (`ATHLETICS=1 ...`),
+`hp`, `damage`, `coin`, `gear` (`<count>~<KEY>~<name>` items between `|`) and `encounter`.
+`FOE`<k>` is foe `k`, a JSON object with `key` (its kind), `label`, `ac`, `hp`, `hpmax`, `init`, `attack`, `damage`, `level`
+and `notes`;
+`ORDER` the initiative order (`<token>~<roll>` between spaces, a token `P<dbref number>` or `F<k>`), `ROUND`
+and `TURN`; `COND`<token>` that token's conditions.
+
+The traits are a `+config` table on **Mythtek Sheet Store**: `TRAIT`<KEY>` holds the label, with `KIND`
+(ability or skill), `ABILITY` (a skill's ability key) and `ORDER` beneath. The bestiary is `FOE`<KIND>`, the
+label, with `AC`, `HP`, `INIT`, `ATTACK`, `DAMAGE`, `LEVEL` and `NOTES` beneath.
+
+## The sheet API
+
+Every sheet package (`sheet-mt`, `sheet-fate`, and the ones that follow) has the same `API` tree on
+its sheet object, so a bridge such as a Duties provider is written the same way for each. The
+attributes are VISUAL on a WIZARD object, so only code at least that privileged calls them
+(`safer_ufun`). They read the sheet itself, never an encounter's copy, and roll; only `API`COIN` and `API`GEAR` write.
+
+| Attribute | Arguments | Returns |
+|---|---|---|
+| `` API`TRAITS `` | | `[{"key","label","group","always"}]`; always is true for the abilities |
+| `` API`ALWAYS `` | | the keys anyone can roll, a space list |
+| `` API`FIND `` | typed text | the key it names, or nothing |
+| `` API`LABEL `` | key | its label |
+| `` API`RATING `` | character, key | what it adds to a roll |
+| `` API`TRAINED `` | character, key | 1 when trained (abilities always) |
+| `` API`HAS `` | character | 1 when anything is set on their sheet |
+| `` API`TARGET `` | DC or difficulty word | the DC, or nothing |
+| `` API`TIER `` | total, natural die, DC | `crit-fail`, `fail`, `success`, `crit-success`, or nothing without a DC |
+| `` API`COIN `` | character, amount, reason | adds coin (less than 0 takes it), returns the new total; a write, logged |
+| `` API`GEAR `` | character, item, amount, reason | adds that many of an item, returns how many now; a write, logged |
+| `` API`CHECK `` | named: `roller`, `trait`, `modifier`, `target`, `dice` (`1mt`, `2mtkh`, `2mtkl`) | `{"tier","total","natural","target","margin","label","text","roll","formula"}`, the roll kept with `roll(...,record)` |
+
+## What a bridge may set
+
+On the **Mythtek Sheet** object:
+
+- `` HINT`<message> `` adds a line to one of the sheet's messages (`SWITCHES`, `FOOTER`, `CHARGEN`).
+- `` GATE`EDIT `` (`%0` the player) gives a reason a player may not change their own sheet now, or nothing.
+- `` ALLOW`VIEW`<name> `` (`%0` who asks, `%1` whose sheet) lets more people read a sheet.

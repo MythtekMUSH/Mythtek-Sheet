@@ -1,0 +1,341 @@
+format: "1.20"
+package: sheet-mt
+title: "Mythtek sheet"
+version: 2.2.5
+authors: [MythtekMUSH]
+description: "A Mythtek character sheet built from a ledger: six ability scores, a skill list the game edits, training, level, hit points, coin and gear, with separate audited ledgers for XP, coin and gear. Guided character creation, XP advances, +check rolls 1mt plus a trait against a DC, and encounters that keep their own copy of each sheet, with foes from a bestiary the game edits, initiative, turns and conditions."
+license: MIT
+homepage: https://github.com/MythtekMUSH/Mythtek-Sheet
+keywords: [sheet, mt, dice, checks, encounters]
+category: Game System
+subcategory: Mythtek
+requires_server: ">=1.0"
+verified_server: "1.0"
+
+# One permission, for the people who keep sheets: change any character's sheet at any time and read every
+# sheet. A player fills in their own sheet until they are approved. Changing the traits and settings is
+# config.admin, as +config is.
+categories:
+  roles:
+    - name: Mythtek sheet
+      description: Roles for the people who keep Mythtek character sheets.
+  permissions:
+    - name: Mythtek sheet
+      description: Keeping Mythtek character sheets.
+permissions:
+  - name: softcode.mt.admin
+    category: Mythtek sheet
+    description: Read every Mythtek sheet and change any character's at any time.
+roles:
+  - slug: mt-sheet-keeper
+    name: Mythtek Sheet Keeper
+    category: Mythtek sheet
+    priority: 11
+    permissions:
+      softcode.mt.admin: allow
+
+# Every character's Mythtek tree is their mt sheet: only wizards write it, so a player can't make the root
+# before the sheet does, and it is never a command.
+attributes:
+  Mythtek:
+    flags: [wizard, no_command]
+
+objects:
+  # The command object, in the master room. WIZARD because it adds the commands (@command/add, @hook),
+  # writes the sheet attributes on characters, and reads them for other packages.
+  #
+  # A character's sheet is built from their ledger, Mythtek`LEDGER`<n>: one JSON entry for each step (a score, an
+  # advance, a skill's training, a level, a revoke, a clear), each with the wizard attribute flag, so only this
+  # object or a wizard writes one and an entry without the flag is never read. Before approval a player's change
+  # rewrites their own chargen entry for it; every other change is a new entry, so the ledger is the sheet's
+  # history; Mythtek`MERGED caches the entries in force. XP, coin and gear each have a ledger of their own,
+  # Mythtek`XPLEDGER`<n>, Mythtek`MONEYLEDGER`<n> and Mythtek`GEARLEDGER`<n>, and Mythtek`XP, Mythtek`COIN and Mythtek`GEAR`<KEY>
+  # (<count>|<name>) cache their running totals. In play: Mythtek`DAMAGE, Mythtek`ENCOUNTERS (the encounters they are
+  # in, in the order they joined) and Mythtek`USING (the one /use picked). The Mythtek root is wizard-flagged, so only
+  # this object writes any of them.
+  #
+  # +sheet, +check and +encounter are added with /noparse/rsnoparse and hooked to CMD`<word>, so what a player
+  # types reaches the code exactly as typed and nothing a player wrote is ever evaluated.
+  #
+  # Trees: CMD` the hooked commands, INC`COMMAND` the parse and dispatch, INC`SHEET`, INC`CHECK` and
+  # INC`ENCOUNTER` one routine per switch, INC`NEED` the guards they share, INC`DO` the writes. FUN`LEDGER`
+  # and FUN`BUILD` read the ledger, FUN`BOOK` the XP, coin and gear ledgers, FUN`VIEW` and FUN`V` the view a roll or screen reads (the sheet, or an
+  # encounter's copy), FUN`GEAR` items, FUN`ENC` encounters, FUN`CHARGEN` character creation, FUN`TRAIT` the
+  # trait table, FUN`RATING` the numbers, FUN`PERM` who may do what, FUN`SCREEN` and FUN`DISPLAY` the screens.
+  # API` the functions other packages call (VISUAL), the same names in every sheet package. Bridges add
+  # HINT`<message> lines, GATE`EDIT (a reason a player may not change their own sheet now) and
+  # ALLOW`VIEW`<name> (who else may read a sheet).
+  - ref: sheet
+    type: thing
+    name: Mythtek Sheet
+    location: "{{$master_room}}"
+    flags: [WIZARD]
+    attributes:
+      # ---- settings ---------------------------------------------------------------
+      # +config mt shows and changes them (sheet-mt-config); the code reads each with get(%!/DATA`CONFIG`<NAME>).
+      DATA`CONFIG: |-
+        Settings for the Mythtek sheet. One leaf per setting.
+      DATA`CONFIG`LABEL: |-
+        Mythtek sheet
+      DATA`CONFIG`SCORE-DEFAULT: |-
+        10
+      DATA`CONFIG`SCORE-DEFAULT`TYPE: |-
+        integer
+      DATA`CONFIG`SCORE-DEFAULT`DEFAULT: |-
+        10
+      DATA`CONFIG`SCORE-DEFAULT`MIN: |-
+        1
+      DATA`CONFIG`SCORE-DEFAULT`MAX: |-
+        30
+      DATA`CONFIG`SCORE-DEFAULT`LABEL: |-
+        Score before it is set
+      DATA`CONFIG`SCORE-DEFAULT`DESCRIPTION: |-
+        The ability score a character has until one is set.
+      DATA`CONFIG`SCORE-DEFAULT`EXAMPLE: |-
+        8
+      DATA`CONFIG`SCORE-MIN: |-
+        1
+      DATA`CONFIG`SCORE-MIN`TYPE: |-
+        integer
+      DATA`CONFIG`SCORE-MIN`DEFAULT: |-
+        1
+      DATA`CONFIG`SCORE-MIN`MIN: |-
+        1
+      DATA`CONFIG`SCORE-MIN`MAX: |-
+        30
+      DATA`CONFIG`SCORE-MIN`LABEL: |-
+        Lowest score
+      DATA`CONFIG`SCORE-MIN`DESCRIPTION: |-
+        The lowest ability score +sheet/set takes.
+      DATA`CONFIG`SCORE-MIN`EXAMPLE: |-
+        3
+      DATA`CONFIG`SCORE-MAX: |-
+        20
+      DATA`CONFIG`SCORE-MAX`TYPE: |-
+        integer
+      DATA`CONFIG`SCORE-MAX`DEFAULT: |-
+        20
+      DATA`CONFIG`SCORE-MAX`MIN: |-
+        1
+      DATA`CONFIG`SCORE-MAX`MAX: |-
+        30
+      DATA`CONFIG`SCORE-MAX`LABEL: |-
+        Highest score
+      DATA`CONFIG`SCORE-MAX`DESCRIPTION: |-
+        The highest score a player's advances take an ability to. Sheet keepers may go to 30.
+      DATA`CONFIG`SCORE-MAX`EXAMPLE: |-
+        18
+      DATA`CONFIG`LEVEL-MAX: |-
+        20
+      DATA`CONFIG`LEVEL-MAX`TYPE: |-
+        integer
+      DATA`CONFIG`LEVEL-MAX`DEFAULT: |-
+        20
+      DATA`CONFIG`LEVEL-MAX`MIN: |-
+        1
+      DATA`CONFIG`LEVEL-MAX`MAX: |-
+        100
+      DATA`CONFIG`LEVEL-MAX`LABEL: |-
+        Highest level
+      DATA`CONFIG`LEVEL-MAX`DESCRIPTION: |-
+        The highest level a character can have.
+      DATA`CONFIG`LEVEL-MAX`EXAMPLE: |-
+        10
+
+        
+  # The traits on every sheet and the bestiary. Inside the Mythtek Sheet, so no player can reach it, and
+  # no_command, so nothing kept on it is ever matched as a command. A trait is TRAIT`<KEY>, its value the label,
+  # with KIND (ability or skill), ABILITY (a skill's ability key) and ORDER beneath. Staff change them with
+  # +config mt/traits. A foe is FOE`<KEY>, its value the name, with AC, HP, INIT, ATTACK, DAMAGE, LEVEL and
+  # NOTES beneath; staff change them with +config mt/foes. The creatures here are this package's own.
+  - ref: store
+    type: thing
+    name: Mythtek Sheet Store
+    location: "{{sheet}}"
+    flags: [no_command]
+    attributes:
+      TRAIT`ADVERSARY: |-
+        Adversary
+      TRAIT`ADVERSARY`KIND: |-
+        calling
+      TRAIT`CREATOR: |-
+        Creator
+      TRAIT`CREATOR`KIND: |-
+        calling
+      TRAIT`DESTROYER: |-
+        Destroyer
+      TRAIT`DESTROYER`KIND: |-
+        calling
+      TRAIT`EARTH-SHAKER: |-
+        Earth-Shaker
+      TRAIT`EARTH-SHAKER`KIND: |-
+        calling
+      TRAIT`GUARDIAN: |-
+        Guardian
+      TRAIT`GUARDIAN`KIND: |-
+        calling
+      TRAIT`HEALER: |-
+        Healer
+      TRAIT`HEALER`KIND: |-
+        calling
+      TRAIT`HUNTER: |-
+        Hunter
+      TRAIT`HUNTER`KIND: |-
+        calling
+      TRAIT`JUDGE: |-
+        Judge
+      TRAIT`JUDGE`KIND: |-
+        calling
+      TRAIT`LEADER: |-
+        Leader
+      TRAIT`LEADER`KIND: |-
+        calling
+      TRAIT`LIMINAL: |-
+        Liminal
+      TRAIT`LIMINAL`KIND: |-
+        calling
+      TRAIT`LOVER: |-
+        Lover
+      TRAIT`LOVER`KIND: |-
+        calling
+      TRAIT`MONSTER: |-
+        Monster
+      TRAIT`MONSTER`KIND: |-
+        calling
+      TRAIT`NEPTUNE: |-
+        Neptune
+      TRAIT`NEPTUNE`KIND: |-
+        calling
+      TRAIT`PRIMEVAL: |-
+        Primeval
+      TRAIT`PRIMEVAL`KIND: |-
+        calling
+      TRAIT`SAFE: |-
+        Safe
+      TRAIT`SAFE`KIND: |-
+        calling
+      TRAIT`SAGE: |-
+        Sage
+      TRAIT`SAGE`KIND: |-
+        calling
+      TRAIT`SHEPARD: |-
+        Shepard
+      TRAIT`SHEPARD`KIND: |-
+        calling
+      TRAIT`TRICKSTER: |-
+        Trickster
+      TRAIT`TRICKSTER`KIND: |-
+        calling
+      TRAIT`TYRANT: |-
+        Tyrant
+      TRAIT`TYRANT`KIND: |-
+        calling
+      TRAIT`WARRIOR: |-
+        Warrior
+      TRAIT`WARRIOR`KIND: |-
+        calling
+      TRAIT`ARETE: |-
+        Arete
+      TRAIT`ARETE`KIND: |-
+        purview
+      TRAIT`ARTISTRY: |-
+        Artistry
+      TRAIT`ARTISTRY`KIND: |-
+        purview
+      TRAIT`BEASTS: |-
+        Beasts
+      TRAIT`BEASTS`KIND: |-
+        purview
+      TRAIT`BEAUTY: |-
+        Beauty
+      TRAIT`BEAUTY`KIND: |-
+        purview
+      TRAIT`CHAOS: |-
+        Chaos
+      TRAIT`CHAOS`KIND: |-
+        purview
+      TRAIT`DARKNESS: |-
+        Darkness
+      TRAIT`DARKNESS`KIND: |-
+        purview
+      TRAIT`DEATH: |-
+        Death
+      TRAIT`DEATH`KIND: |-
+        purview
+      TRAIT`DECEPTION: |-
+        Deception
+      TRAIT`DECEPTION`KIND: |-
+        purview
+      TRAIT`EARTH: |-
+        Earth
+      TRAIT`EARTH`KIND: |-
+        purview
+      TRAIT`FERTILITY: |-
+        Fertility
+      TRAIT`FERTILITY`KIND: |-
+        purview
+      TRAIT`FIRE: |-
+        Fire
+      TRAIT`FIRE`KIND: |-
+        purview
+      TRAIT`FORGE: |-
+        Forge
+      TRAIT`FORGE`KIND: |-
+        purview
+      TRAIT`FORTUNE: |-
+        Fortune
+      TRAIT`FORTUNE`KIND: |-
+        purview
+      TRAIT`FROST: |-
+        Frost
+      TRAIT`FROST`KIND: |-
+        purview
+      TRAIT`HEALTH: |-
+        Health
+      TRAIT`HEALTH`KIND: |-
+        purview
+      TRAIT`JOURNEYS: |-
+        Journeys
+      TRAIT`JOURNEYS`KIND: |-
+        purview
+      TRAIT`MOON: |-
+        Moon
+      TRAIT`MOON`KIND: |-
+        purview
+      TRAIT`ORDER: |-
+        Order
+      TRAIT`ORDER`KIND: |-
+        purview
+      TRAIT`PASSION: |-
+        Passion
+      TRAIT`PASSION`KIND: |-
+        purview
+      TRAIT`PROSPERITY: |-
+        Prosperity
+      TRAIT`PROSPERITY`KIND: |-
+        purview
+      TRAIT`SKY: |-
+        Sky
+      TRAIT`SKY`KIND: |-
+        purview
+      TRAIT`STARS: |-
+        Stars
+      TRAIT`STARS`KIND: |-
+        purview
+      TRAIT`SUN: |-
+        Sun
+      TRAIT`SUN`KIND: |-
+        purview
+      TRAIT`WAR: |-
+        War
+      TRAIT`WAR`KIND: |-
+        purview
+      TRAIT`WATER: |-
+        Water
+      TRAIT`WATER`KIND: |-
+        purview
+      TRAIT`WILD: |-
+        Wild
+      TRAIT`WILD`KIND: |-
+        purview
+
