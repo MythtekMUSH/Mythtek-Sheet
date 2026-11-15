@@ -1,0 +1,187 @@
+name: Validate packages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engine-refs:
+    # The SharpMUSH refs to validate against: main (or vars.SHARPMUSH_REF) and,
+    # once one exists, the latest release tag vX.Y.Z.
+    runs-on: ubuntu-latest
+    outputs:
+      refs: ${{ steps.refs.outputs.refs }}
+    steps:
+      - id: refs
+        env:
+          MAIN_REF: ${{ vars.SHARPMUSH_REF || 'main' }}
+        run: |
+          set -eo pipefail
+          release=$(git ls-remote --tags --refs https://github.com/SharpMUSH/SharpMUSH 'v*' \
+            | sed 's#.*refs/tags/##' | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -1)
+          refs=$(printf '%s\n' "$MAIN_REF" $release | jq -R . | jq -sc .)
+          echo "Validating against: $refs"
+          echo "refs=$refs" >> "$GITHUB_OUTPUT"
+
+  validate:
+    needs: engine-refs
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sharpmush-ref: ${{ fromJSON(needs.engine-refs.outputs.refs) }}
+    name: validate (SharpMUSH ${{ matrix.sharpmush-ref }})
+    steps:
+      - name: Checkout packages
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          path: packages
+
+      - name: Checkout SharpMUSH
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          repository: SharpMUSH/SharpMUSH
+          ref: ${{ matrix.sharpmush-ref }}
+          path: sharpmush
+
+      # A release builds with the exact SDK it was tagged with. Its global.json rolls forward to
+      # the newest SDK on the runner, and v0.9.0 (tagged on 11.0.100-rc.2) does not compile on
+      # 11.0.100, which changed ZstandardDictionary.Train. main keeps its own roll-forward rule.
+      - name: Pin a release's SDK
+        if: matrix.sharpmush-ref != (vars.SHARPMUSH_REF || 'main')
+        working-directory: sharpmush
+        run: |
+          jq '.sdk.rollForward = "disable"' global.json > global.json.pinned
+          mv global.json.pinned global.json
+          cat global.json
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: sharpmush/global.json
+
+      # Run from the SharpMUSH checkout so its global.json picks the SDK; from the
+      # workspace root, dotnet would take the newest SDK on the runner instead.
+      - name: Validate manifests (strict)
+        working-directory: sharpmush
+        run: dotnet run --project tools/PackageValidator -- ../packages --strict
+
+      # The behaviour tests: tests/<package>/*.yaml (see tests/README.md) and the tests the engine keeps for
+      # library packages, all in the SharpMUSH.Tests.PackageLibrary namespace. They install packages from this
+      # checkout. An engine from before that namespace (a release older than it) has only the duties tests.
+      - name: Package behaviour tests
+        working-directory: sharpmush
+        env:
+          SHARPMUSH_PACKAGES_PATH: ${{ github.workspace }}/packages
+          TUNIT_DISABLE_HTML_REPORTER: "true"
+          ENGINE_REF: ${{ matrix.sharpmush-ref }}
+          MAIN_REF: ${{ vars.SHARPMUSH_REF || 'main' }}
+        timeout-minutes: 30
+        run: |
+          if grep -rqs --include=*.cs "namespace SharpMUSH.Tests.PackageLibrary;" SharpMUSH.Tests.Integration; then
+            filter="/*/SharpMUSH.Tests.PackageLibrary/*/*"
+          else
+            filter="/*/*/Duties*/*"
+          fi
+          # A release's dependencies are fixed when it is tagged, and an advisory published later fails its
+          # restore (NU1902 is an error under TreatWarningsAsErrors) without saying anything about the
+          # packages. main keeps the audit.
+          audit=""
+          if [ "$ENGINE_REF" != "$MAIN_REF" ]; then
+            audit="-p:NuGetAudit=false"
+          fi
+          dotnet run --project SharpMUSH.Tests.Integration $audit -- --treenode-filter "$filter" --output Detailed
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout packages
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check every changed package has a new version
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 -I tools/release/packages.py check-bumps "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Check the README package table matches index.yaml
+        run: python3 tools/readme-packages-table.py --check
+
+      - name: Check PF2e navigation and notice links
+        run: python3 tools/check-pf2e-navigation.py
+
+      - name: Check the PF2e cache version follows the package version
+        run: python3 tools/check-pf2e-cache-version.py
+
+      - name: Check the PF2e behaviour tests are what their scenarios give
+        run: python3 -I tools/pf2e-tests/build.py --check
+
+  release:
+    # Tags <package-dir>/v<version> for every package version on main that has
+    # no tag yet, at the last commit that touched the package's directory.
+    needs: [validate, checks]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-tags
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag new package versions
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          # A package changed after its tag without a new version still lets
+          # the other packages' tags through, then fails the job.
+          drift=0
+          pending=$(python3 -I tools/release/packages.py pending-tags) || drift=1
+          if [ -z "$pending" ]; then
+            echo "No new package versions."
+            exit "$drift"
+          fi
+          tags=()
+          while read -r tag commit; do
+            git tag -a "$tag" "$commit" -m "$tag"
+            echo "Tagged $tag at $commit"
+            tags+=("refs/tags/$tag")
+          done <<< "$pending"
+          git push --atomic origin "${tags[@]}"
+          exit "$drift"
+
+  immutable-tags:
+    # Release tags (<pkg>/vX.Y.Z) are immutable: this job fails any push that
+    # moves or deletes one. Combine with a repository ruleset for enforcement.
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check release tags still reachable
+        run: |
+          set -e
+          for tag in $(git tag -l '*/v*'); do
+            if ! git merge-base --is-ancestor "$tag" HEAD; then
+              echo "::error::Release tag $tag is no longer reachable from main (history rewrite?)"
+              exit 1
+            fi
+          done
+          echo "All release tags reachable."

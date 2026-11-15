@@ -1,25 +1,25 @@
 name:
 description:
 packages:
-  - path: sheet-d20/
+  - path: sheet-mt/
     name: Mythtek Sheet
-    package: sheet-d20
+    package: sheet-mt
     version: 2.2.5
-    description: d20 character sheet built from a ledger (abilities, skills, training, level, hit points, coin, gear), guided character creation, +check against a DC or a foe, and encounters with their own sheet copies, foes from a bestiary, initiative and conditions
-  - path: sheet-d20-help/
-    package: sheet-d20-help
+    description: mt character sheet built from a ledger (abilities, skills, training, level, hit points, coin, gear), guided character creation, +check against a DC or a foe, and encounters with their own sheet copies, foes from a bestiary, initiative and conditions
+  - path: sheet-mt-help/
+    package: sheet-mt-help
     version: 1.0.3
     description: Puts the Mythtek sheet topics into +help
-  - path: sheet-d20-config/
-    package: sheet-d20-config
+  - path: sheet-mt-config/
+    package: sheet-mt-config
     version: 1.0.4
     description: Puts the Mythtek sheet settings, trait table and bestiary into +config
-  - path: sheet-d20-chargen/
-    package: sheet-d20-chargen
+  - path: sheet-mt-chargen/
+    package: sheet-mt-chargen
     version: 1.1.2
     description: Joins the Mythtek sheet to +app character applications
-  - path: d20-wiki/
+  - path: mt-wiki/
     name: Mythtek rules
-    package: d20-wiki
+    package: mt-wiki
     version: 1.1.2
-    description: Wiki pages for the d20 sheet (checks and DCs, making a character, abilities and skills, hit points, gear and advancement, encounters)
+    description: Wiki pages for the mt sheet (checks and DCs, making a character, abilities and skills, hit points, gear and advancement, encounters)
